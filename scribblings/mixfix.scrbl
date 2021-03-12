@@ -141,20 +141,21 @@ The interaction of this behavior and @tech[#:doc '(lib "scribblings/reference/re
   (module another-submodule racket
     (require mixfix)
 
-    (code:comment @#,elem{(1) the macro expander discovers @racket[x-operator].})
+    (code:comment @#,elem{(1) discovers @racket[x-operator].})
     (define-mixfix-rule (#:x a)
       #:name x-operator
       (add1 a))
 
-    (code:comment @#,elem{(2) the macro expander expands @racket[(#:x 99)].})
+    (code:comment @#,elem{(2) expands @racket[(#:x 99)]. Use @racket[x-operator].})
     (#:x 99)
 
-    (code:comment @#,elem{(3) the macro expander only partially expands @racket[let].})
-    (let ()
-      (code:comment @#,elem{(5) the macro expander expands the body of @racket[let].})
+    (code:comment @#,elem{(3) only partially expands the function application.})
+    (values
+      (code:comment @#,elem{(5) expands the arguments of the function application.})
+      (code:comment @#,elem{Use @racket[y-operator].})
       (#:x 99))
 
-    (code:comment @#,elem{(4) the macro expander discovers @racket[y-operator].})
+    (code:comment @#,elem{(4) discovers @racket[y-operator].})
     (define-mixfix-rule (#:x 99)
       #:name y-operator
       0))

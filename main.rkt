@@ -59,9 +59,7 @@
        (cond
          [(mixfix-transformer? transformer)
           (with-handlers ([exn:fail:mixfix:unsupported? (λ (e) #f)])
-            (local-apply-transformer (mixfix-transformer-t transformer)
-                                     #'(x ...)
-                                     'expression))]
+            ((mixfix-transformer-t transformer) #'(x ...)))]
          [else #f])))
    (cond
      [stx stx]
@@ -96,6 +94,6 @@
           (raise-syntax-error #f "out of context" stx)})
     (define-syntax (op stx)
       (syntax-parse stx
-        [:id (local-apply-transformer the-transformer stx 'expression)]
+        [:id (the-transformer stx)]
         [(arg . args) #'(@#%app arg . args)]))
     ...))
