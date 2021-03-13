@@ -78,7 +78,7 @@ Mixfix operators, regular macros, and core forms can coexist. However, regular m
 
 @section{Operator management}
 
-Similar to regular macros, mixfix operators can be imported and exported from a @techref{module}. Each mixfix operator defining form supports the @racket[#:name] option. The given identifier will be associated with the mixfix operator, allowing users to provide the identifier from a module. It is recommended that the given identifier is not used for any other purpose.
+Similar to regular macros, mixfix operators can be imported and exported from a @techref{module}. Every mixfix operator defining form supports the @racket[#:name] option. The given identifier will be associated with the mixfix operator, allowing users to provide the identifier from a module. It is recommended that the given identifier is not used for any other purpose.
 
 @examples[#:label #f #:eval evaluator
   (module submodule racket
