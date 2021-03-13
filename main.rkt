@@ -5,7 +5,7 @@
          define-mixfix-rule
          define-mixfix-set
          import-mixfix
-         define-literals
+         define-literal
          (for-syntax yield-mixfix))
 
 (require syntax/parse/define
@@ -52,19 +52,18 @@
     (stash the-id)))
 
 (define-syntax-parser @#%app
-  [(_ x ...)
-   (define input-stx #'(x ...))
+  [(_ . xs)
    (define stx
      (for/or ([transformer-id (in-list mixfix-transformers)])
        (define transformer (syntax-local-value transformer-id (λ () #f)))
        (cond
          [(mixfix-transformer? transformer)
           (with-handlers ([exn:fail:mixfix:unsupported? (λ (e) #f)])
-            ((mixfix-transformer-t transformer) input-stx))]
+            ((mixfix-transformer-t transformer) #'xs))]
          [else #f])))
    (cond
      [stx stx]
-     [else #'(x ...)])])
+     [else #'(#%app . xs)])])
 
 (define-syntax-parser import-mixfix
   [(_ x:id ...)
@@ -87,14 +86,9 @@
   (define-syntax name
     (mixfix-transformer-set (list (quote-syntax the-set) ...))))
 
-(define-syntax-parse-rule (define-literals (op:id ...)
-                            {~optional transformer-expr:expr})
-  (begin
-    (define-for-syntax (the-transformer stx)
-      {~? (transformer-expr stx)
-          (raise-syntax-error #f "out of context" stx)})
-    (define-syntax (op stx)
-      (syntax-parse stx
-        [:id (the-transformer stx)]
-        [(arg . args) #'(@#%app arg . args)]))
-    ...))
+(define-syntax-parse-rule (define-literal op:id
+                            transformer-expr:expr)
+  (define-syntax (op stx)
+    (syntax-parse stx
+      [:id (transformer-expr stx)]
+      [(arg . args) #'(@#%app arg . args)])))

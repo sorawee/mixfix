@@ -67,13 +67,13 @@ via @racket[yield-mixfix] when the mixfix operator does not want to transform th
 Mixfix operators, regular macros, and core forms can coexist. However, regular macros and core forms will have a higher precedence over mixfix operators.
 
 @examples[#:label #f #:eval evaluator
-  (define-mixfix-rule (x {~datum +one})
+  (define-mixfix-rule (x {~datum ++})
     (add1 x))
 
-  (1337 +one)
+  (1337 ++)
 
   (code:comment @#,elem{@racket[quote-syntax] takes control here})
-  (quote-syntax +one)
+  (quote-syntax ++)
 ]
 
 @section{Operator management}
@@ -143,21 +143,21 @@ The interaction of this behavior and @techref{partial expansion} in a @techref{m
   (module another-submodule racket
     (require mixfix)
 
-    (code:comment @#,elem{(1) discovers @racket[x-operator].})
+    (code:comment @#,elem{(1) @racket[x-operator] is discovered.})
     (define-mixfix-rule (#:x a)
       #:name x-operator
       (add1 a))
 
-    (code:comment @#,elem{(2) expands @racket[(#:x 99)]. Use @racket[x-operator].})
+    (code:comment @#,elem{(2) @racket[x-operator] is used.})
     (#:x 99)
 
-    (code:comment @#,elem{(3) only partially expands the function application.})
+    (code:comment @#,elem{(3) The function application is partially expanded.})
     (values
-      (code:comment @#,elem{(5) expands the arguments of the function application.})
-      (code:comment @#,elem{Use @racket[y-operator].})
+      (code:comment @#,elem{(5) The arguments are expanded.})
+      (code:comment @#,elem{@racket[y-operator] is used.})
       (#:x 99))
 
-    (code:comment @#,elem{(4) discovers @racket[y-operator].})
+    (code:comment @#,elem{(4) @racket[y-operator] is discovered.})
     (define-mixfix-rule (#:x 99)
       #:name y-operator
       0))
@@ -167,42 +167,6 @@ The interaction of this behavior and @techref{partial expansion} in a @techref{m
 
 To avoid a surprising result like this, it is recommended that mixfix operators should not overlap with each other.
 
-@subsection{Recognization of literals via binding}
-
-Racket can recognize literals via binding (e.g., with @racket[free-identifier=?] or @racket[~literal]). One commonly used approach is to bind these literals to a syntax transformer that always raises a syntax error to signal that they are used in an unexpected context. This approach however does not work well with mixfix operators when a literal to be recognized is at the head position, since it becomes a regular macro with a higher precedence over mixfix operators.
-
-@examples[#:label #f #:eval evaluator
-  (define-syntax (this stx) (raise-syntax-error #f "out of context" stx))
-  (define-mixfix-rule ({~literal this} x)
-    (list 'this x))
-
-  (eval:error this)
-  (code:comment @#,elem{Unexpected error})
-  (eval:error (this 7))
-]
-
-Instead, users can define such literals with @racket[define-literals], which will make the defined literals cooperate with mixfix operators properly.
-
-@examples[#:label #f #:eval evaluator
-  (define-literals (this))
-  (define-mixfix-rule ({~literal this} x)
-    (list 'this x))
-
-  (eval:error this)
-  (this 7)
-]
-
-More generally, @racket[define-literals] allows users to supply a syntax transformer, which will be used when the defined literals are used as @tech[#:doc '(lib "scribblings/guide/guide.scrbl")]{identifier macros}.
-
-@examples[#:label #f #:eval evaluator
-  (define-literals (this)
-    (λ (stx) #'42))
-  (define-mixfix-rule ({~literal this} x)
-    (list 'this x))
-
-  this
-  (this 7)
-]
 
 @subsection{Unintentional yielding}
 
@@ -236,7 +200,57 @@ One possible solution to this problem is to use the cut (@racket[~!]) operator f
   (eval:error (define g (x : x 1)))
 ]
 
+@subsection{Interaction with submodules}
+
+A mixfix operator defined in a module cannot be used in @racket[module+] submodules.
+
+@examples[#:label #f #:eval evaluator
+  (eval:error (module foo racket
+                (require mixfix)
+                (define-mixfix-rule (#:x) 42)
+                (module+ test
+                  (#:x))))
+]
+
+The issue can be workaround by using @racket[import-mixfix].
+
+@examples[#:label #f #:eval evaluator
+  (module foo racket
+    (require mixfix)
+    (define-mixfix-rule (#:x)
+      #:name x-op
+      42)
+    (module+ test
+      (import-mixfix x-op)
+      (#:x)))
+]
+
 @section{Tips & Tricks}
+
+@subsection{Using an identifier macro at a head position}
+
+An @tech[#:doc '(lib "scribblings/guide/guide.scrbl")]{identifier macro} can be used along with mixfix operators. However, when it is used at a head position, it becomes a regular macro invocation with a higher precedence over mixfix operations.
+
+@examples[#:label #f #:eval evaluator
+  (define-syntax (this stx) #'42)
+  (define-mixfix-rule (x {~datum +} y)
+    (+ x y))
+
+  (99 + this)
+  (code:comment @#,elem{Unexpected result})
+  (this + 99)
+]
+
+To make the identifier macro cooperate with mixfix operators properly, users need to expand the identifier macro to the function application form provided by the @racketmodname[mixfix] library when it is at a head position. The @racketmodname[mixfix] library provides @racket[define-literal] to help automating this process.
+
+@examples[#:label #f #:eval evaluator
+  (define-literal this (λ (stx) #'42))
+  (define-mixfix-rule (x {~datum +} y)
+    (+ x y))
+
+  (99 + this)
+  (this + 99)
+]
 
 @subsection{Custom function application integration}
 
@@ -246,11 +260,11 @@ Several Racket libraries override @seclink["expand-steps" #:doc '(lib "scribblin
   (module very-fancy-app racket
     (code:comment @#,elem{Flip all arguments})
     (provide (rename-out [$#%app #%app]))
-    (define-syntax ($#%app stx)
-      (syntax-case stx ()
-        [(_ x ...) #`(#%app #,@(reverse (syntax->list #'(x ...))))])))
+    (require syntax/parse/define)
+    (define-syntax-parser $#%app
+      [(_ x ...) #`(#%app #,@(reverse (syntax->list #'(x ...))))]))
 
-  (code:comment @#,elem{Don't import directly})
+  (code:comment @#,elem{Rename @racketid[#%app]})
   (require (only-in 'very-fancy-app [#%app very-fancy-app:#%app]))
 
   (code:comment @#,elem{Make the fallback mixfix operator catches everything})
@@ -302,10 +316,7 @@ The flexibility that this library provides comes at the cost of performance. How
   Binds @racket[name-id] to a @tech{mixfix operator set} that contains @racket[id]s which must be identifiers bound to a mixfix operator or a @tech{mixfix operator set} in the specified order.
 }
 
-@defform[(define-literals (id ...) maybe-transformer)
-         #:grammar
-         [(maybe-transformer (code:line)
-                             (code:line transformer-expr))]
+@defform[(define-literal id transformer-expr)
          #:contracts ([transformer-expr (-> syntax? syntax?)])]{
-  Defines @racket[id]s as @tech[#:doc '(lib "scribblings/guide/guide.scrbl")]{identifier macros} that cooperate with mixfix operators. The identifier macros are associated with @racket[transformer-expr]. If not given, @racket[transformer-expr] defaults to a procedure that always raises an ``out of context'' syntax error.
+  Defines @racket[id] as an @tech[#:doc '(lib "scribblings/guide/guide.scrbl")]{identifier macro} that cooperates with mixfix operators. The identifier macro is associated with @racket[transformer-expr].
 }
