@@ -137,7 +137,7 @@ Mixfix operators are discovered as the macro expander expands the program. When 
   (#:x 99)
 ]
 
-The interaction of this behavior and @techref{partial expansion} in a @techref{module context} or an @techref{internal-definition context} could lead to a surprising outcome, however.
+The interaction of this behavior and @techref{partial expansion} in a @techref{module context} or an @techref{internal-definition context} could lead to a surprising outcome, however. Therefore, mixfix operators should be carefully designed and defined.
 
 @examples[#:label #f #:eval evaluator
   (module another-submodule racket
@@ -164,9 +164,6 @@ The interaction of this behavior and @techref{partial expansion} in a @techref{m
 
   (require 'another-submodule)
 ]
-
-To avoid a surprising result like this, it is recommended that mixfix operators should not overlap with each other.
-
 
 @subsection{Unintentional yielding}
 
@@ -320,3 +317,59 @@ The flexibility that this library provides comes at the cost of performance. How
          #:contracts ([transformer-expr (-> syntax? syntax?)])]{
   Defines @racket[id] as an @tech[#:doc '(lib "scribblings/guide/guide.scrbl")]{identifier macro} that cooperates with mixfix operators. The identifier macro is associated with @racket[transformer-expr].
 }
+
+@section{Gallery}
+
+@subsection{Arithmetic}
+
+@(define new-evaluator (make-base-eval))
+@(new-evaluator '(require mixfix
+                            (for-syntax syntax/parse
+                                        racket/base)))
+
+@examples[#:label #f
+          #:eval new-evaluator
+          #:preserve-source-locations
+  (define-mixfix-rule (x {~seq {~literal +} xs} ...+)
+    #:when (eq? (syntax-property this-syntax 'paren-shape) #\{)
+    (+ x xs ...))
+
+  (apply + '(1 2 3))
+  {4 + 5 + 6}
+]
+
+@subsection{Testing forms}
+
+
+@examples[#:label #f
+          #:eval new-evaluator
+          #:preserve-source-locations
+
+  (define-mixfix-rule ({~datum $} ~! . _)
+    #:fail-when #true "unknown testing form"
+    (void))
+
+  (define-mixfix-rule ({~datum $} x {~datum is} y {~datum because-of} z)
+    (let ([x* x] [y* y] [z* z])
+      (unless (equal? x* y*)
+        (raise-arguments-error 'test "not equal"
+                               "expected" y*
+                               "got" x*))
+      (unless (equal? z* y*)
+        (raise-arguments-error 'test "wrong explanation"
+                               "expected" y*
+                               "explanation" z*))))
+
+  (define-mixfix-rule ({~datum $} x {~datum is} y)
+    (let ([y* y])
+      ($ x is y* because-of y*)))
+
+  (define (times-two x)
+    (+ x x))
+
+  ($ (times-two 3) is 6)
+  (eval:error ($ (times-two 3) is 7))
+  ($ (times-two 3) is 6 because-of (* 2 3))
+  (eval:error ($ (times-two 3) is 6 because-of (+ 2 3)))
+  (eval:error ($ (times-two 3) is 6 because-of))
+]
