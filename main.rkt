@@ -53,13 +53,14 @@
 
 (define-syntax-parser @#%app
   [(_ x ...)
+   (define input-stx #'(x ...))
    (define stx
      (for/or ([transformer-id (in-list mixfix-transformers)])
        (define transformer (syntax-local-value transformer-id (λ () #f)))
        (cond
          [(mixfix-transformer? transformer)
           (with-handlers ([exn:fail:mixfix:unsupported? (λ (e) #f)])
-            ((mixfix-transformer-t transformer) #'(x ...)))]
+            ((mixfix-transformer-t transformer) input-stx))]
          [else #f])))
    (cond
      [stx stx]

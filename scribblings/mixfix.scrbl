@@ -8,6 +8,8 @@
 
 @(define evaluator (make-base-eval))
 @(evaluator '(require mixfix))
+@(define (techref . rest)
+  (apply tech #:doc '(lib "scribblings/reference/reference.scrbl") rest))
 
 @title{mixfix}
 @author[@author+email["Sorawee Porncharoenwase" "sorawee.pwase@gmail.com"]]
@@ -18,7 +20,7 @@ This library allows users to define and use @deftech{mixfix operators} in Racket
 
 @section{Overview}
 
-The Racket language uses the prefix notation: in a macro invocation @racket[(m x ....)], the macro operator @racket[m] must be an identifier located at the head position, and bound to a @tech[#:doc '(lib "scribblings/reference/reference.scrbl")]{syntax transformer}.
+The Racket language uses the prefix notation: in a macro invocation @racket[(m x ....)], the macro operator @racket[m] must be an identifier located at the head position, and bound to a @techref{syntax transformer}.
 
 The mixfix notation, on the other hand, allows a macro invocation to have multiple operator tokens in arbitrary position (or even no operator token at all!). For example, one can define the conditional ternary operator via @racket[define-mixfix-rule] and then use it as follows:
 
@@ -76,7 +78,7 @@ Mixfix operators, regular macros, and core forms can coexist. However, regular m
 
 @section{Operator management}
 
-Similar to regular macros, mixfix operators can be imported and exported from a @tech[#:doc '(lib "scribblings/reference/reference.scrbl")]{module}. Each mixfix operator defining form supports the @racket[#:name] option. The given identifier will be associated with the mixfix operator, allowing users to provide the identifier from a module. It is recommended that the given identifier is not used for any other purpose.
+Similar to regular macros, mixfix operators can be imported and exported from a @techref{module}. Each mixfix operator defining form supports the @racket[#:name] option. The given identifier will be associated with the mixfix operator, allowing users to provide the identifier from a module. It is recommended that the given identifier is not used for any other purpose.
 
 @examples[#:label #f #:eval evaluator
   (module submodule racket
@@ -135,7 +137,7 @@ Mixfix operators are discovered as the macro expander expands the program. When 
   (#:x 99)
 ]
 
-The interaction of this behavior and @tech[#:doc '(lib "scribblings/reference/reference.scrbl")]{partial expansion} in a @tech[#:doc '(lib "scribblings/reference/reference.scrbl")]{module context} or an @tech[#:doc '(lib "scribblings/reference/reference.scrbl")]{internal-definition context} could lead to a surprising outcome, however.
+The interaction of this behavior and @techref{partial expansion} in a @techref{module context} or an @techref{internal-definition context} could lead to a surprising outcome, however.
 
 @examples[#:label #f #:eval evaluator
   (module another-submodule racket
@@ -202,6 +204,37 @@ More generally, @racket[define-literals] allows users to supply a syntax transfo
   (this 7)
 ]
 
+@subsection{Unintentional yielding}
+
+When using @racket[define-mixfix-rule], users need to be careful that the pattern matching failure will not result in an unintentional yielding.
+
+As an example, users might want to create a shorthand lambda notation as follows:
+
+@examples[#:label #f #:eval evaluator
+  (define-mixfix-rule ({~and arg:id {~not {~datum :}}} ... {~datum :} body:expr)
+    (λ (arg ...) body))
+
+  (define f (x : (y : (+ x y))))
+  ((f 1) 2)
+]
+
+But when the lambda notation is ill-formed, the operator would yield to next operators (function application in this case).
+Unintentional yielding creates an obscure error at best and incorrect program at worst.
+
+@examples[#:label #f #:eval evaluator
+  (eval:error (define g (x : x 1)))
+]
+
+One possible solution to this problem is to use the cut (@racket[~!]) operator from @racketmodname[syntax/parse], which can be used to commit the parsing.
+
+@examples[#:label #f #:eval evaluator
+  (define-mixfix-rule ({~and arg:id {~not {~datum :}}} ... {~datum :} ~! body:expr)
+    (λ (arg ...) body))
+
+  (define f (x : (y : (+ x y))))
+  ((f 1) 2)
+  (eval:error (define g (x : x 1)))
+]
 
 @section{Tips & Tricks}
 
@@ -230,6 +263,10 @@ Several Racket libraries override @seclink["expand-steps" #:doc '(lib "scribblin
   (#true ? 1 : 2)
   (12 34 -)
 ]
+
+@;{NOTE: after here, the previous section completely wrecks
+   the function application, so either make a new evaluator
+   or move the examples before the previous section.}
 
 @section{Performance}
 
