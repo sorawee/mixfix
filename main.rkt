@@ -40,16 +40,24 @@
           #f
           "identifier not bound to mixfix-transformer or mixfix-transformer-set"
           stx
-          t)]))))
+          t)])))
 
-(define-syntax-parse-rule (stash x)
-  #:do [(set! mixfix-transformers (cons #'x mixfix-transformers))]
-  (begin))
+  (define (record! x)
+    (set! mixfix-transformers (cons x mixfix-transformers))))
+
+(define-syntax-parser stash!
+  [(_ x)
+   #:when (eq? 'module (syntax-local-context))
+   #'(begin-for-syntax
+       (record! #'x))]
+  [(_ x)
+   (record! #'x)
+   #'(begin)])
 
 (define-syntax-parse-rule (define-mixfix :options transformer)
   (begin
     (define-syntax the-id (mixfix-transformer transformer))
-    (stash the-id)))
+    (stash! the-id)))
 
 (define-syntax-parser @#%app
   [(_ . xs)
