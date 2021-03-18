@@ -45,14 +45,9 @@
   (define (record! x)
     (set! mixfix-transformers (cons x mixfix-transformers))))
 
-(define-syntax-parser stash!
-  [(_ x)
-   #:when (eq? 'module (syntax-local-context))
-   #'(begin-for-syntax
-       (record! #'x))]
-  [(_ x)
-   (record! #'x)
-   #'(begin)])
+(define-syntax-parse-rule (stash! x)
+  #:do [(record! #'x)]
+  (begin))
 
 (define-syntax-parse-rule (define-mixfix :options transformer)
   (begin

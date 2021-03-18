@@ -198,6 +198,32 @@ One possible solution to this problem is to use the cut (@racket[~!]) operator f
   (eval:error (define g (x : x 1)))
 ]
 
+@subsection{Interaction with @racket[module+] submodules}
+
+A mixfix operator defined in a module cannot be used in @racket[module+] submodules.
+
+@examples[#:label #f #:eval evaluator
+  (eval:error (module foo racket
+                (require mixfix)
+                (define-mixfix-rule (#:x) 42)
+                (module+ test
+                  (#:x))))
+]
+
+The issue can be workaround by using @racket[import-mixfix].
+
+@examples[#:label #f #:eval evaluator
+  (module foo racket
+    (require mixfix)
+    (define-mixfix-rule (#:x)
+      #:name x-op
+      42)
+    (module+ test
+      (import-mixfix x-op)
+      (#:x)))
+  (require (submod 'foo test))
+]
+
 @section{Tips & Tricks}
 
 @subsection{Using an identifier macro at a head position}
@@ -350,22 +376,6 @@ The flexibility that this library provides comes at the cost of performance. How
   (eval:error ($ (times-two 3) is 6 because-of))
 ]
 
-@subsection{Usage in @racket[module+]}
-
-@examples[#:label #f
-          #:preserve-source-locations
-  (module plus racket/base
-    (require mixfix
-             (for-syntax syntax/parse racket/base))
-    (define-mixfix-rule (a {~datum +} b)
-      (+ a b))
-    (module+ test
-      (require rackunit)
-      (check-equal? (1 + 2) 3)
-      (check-equal? (4 + 5) 6)))
-  (require (submod 'plus test))
-]
-
 @section{Acknowledgements}
 
-I would like to thank @link["https://users.cs.northwestern.edu/~syt3996/"]{Shu-Hung You} for suggesting a way to remove the limitation when defining mixfix operators in a module but using them in @racket[module+] submodules.
+I would like to thank @link["https://www.rocketnia.com/"]{Ross Angle}, @link["https://users.cs.northwestern.edu/~syt3996/"]{Shu-Hung You}, and @link["https://samth.github.io/"]{Sam Tobin-Hochstadt} for the discussion on the limitation of mixfix operators in @racket[module+] submodules.
