@@ -62,10 +62,7 @@
        (cond
          [(mixfix-transformer? transformer)
           (with-handlers ([exn:fail:mixfix:unsupported? (λ (e) #f)])
-            (local-apply-transformer
-             (mixfix-transformer-t transformer)
-             (syntax-local-introduce #'xs)
-             'expression))]
+            ((mixfix-transformer-t transformer) #'xs))]
          [else #f])))
    (cond
      [stx stx]
